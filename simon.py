@@ -23,9 +23,16 @@ PIPER_MODEL = os.path.expanduser(os.getenv("SIMON_PIPER_MODEL", DEFAULT_PIPER_MO
 WEB_RESEARCH_ENABLED = os.getenv("SIMON_WEB_RESEARCH", "0") == "1"
 WEB_DEBUG_ENABLED = os.getenv("SIMON_WEB_DEBUG", "0") == "1"
 WEB_MAX_RESULTS = int(os.getenv("SIMON_WEB_MAX_RESULTS", "3"))
-ASSISTANT_NAME = (os.getenv("SIMON_ASSISTANT_NAME", "Simon") or "Simon").strip()
+ASSISTANT_NAME = "Simon"
 OLLAMA_MODEL = os.getenv("SIMON_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
 SIMON_FAST_MODE = os.getenv("SIMON_FAST_MODE", "1") == "1"
+SIMON_DEBUG_ENABLED = os.getenv("SIMON_DEBUG", os.getenv("SIMON_WEB_DEBUG", "0")) == "1"
+
+
+def _log_timing(component, elapsed_seconds):
+    if not SIMON_DEBUG_ENABLED:
+        return
+    print(color_text(f"[TIMING] {component}: {elapsed_seconds * 1000:.1f} ms", YELLOW))
 
 
 def _debug_web_request(provider, url, payload=None):
@@ -108,6 +115,7 @@ def color_text(text, color):
 
 
 def record_push_to_talk():
+    started_at = time.perf_counter()
     frames = []
 
     try:
@@ -127,6 +135,7 @@ def record_push_to_talk():
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         filename = f.name
         sf.write(filename, audio_data, FS)
+    _log_timing("record_push_to_talk", time.perf_counter() - started_at)
     return filename
 
 # -------------------
@@ -135,11 +144,13 @@ def record_push_to_talk():
 
 
 def transcribe(filename):
+    started_at = time.perf_counter()
     result = subprocess.run(
         ["whisper-cli", "-m", WHISPER_MODEL, filename],
         capture_output=True,
         text=True
     )
+    _log_timing("whisper.transcribe", time.perf_counter() - started_at)
     return result.stdout.strip()
 
 # -------------------
@@ -162,16 +173,19 @@ You respond conversationally and naturally.
 
 
 def _ask_ollama_cli(full_prompt):
+    started_at = time.perf_counter()
     result = subprocess.run(
         ["ollama", "run", OLLAMA_MODEL],
         input=full_prompt,
         capture_output=True,
         text=True
     )
+    _log_timing("ollama.cli", time.perf_counter() - started_at)
     return result.stdout.strip()
 
 
 def _ask_ollama_api(prompt, system_prompt, num_predict_override=None, allow_empty_response=False):
+    started_at = time.perf_counter()
     num_predict = num_predict_override if num_predict_override is not None else OLLAMA_NUM_PREDICT
 
     payload = {
@@ -198,7 +212,10 @@ def _ask_ollama_api(prompt, system_prompt, num_predict_override=None, allow_empt
             body = response.read().decode("utf-8")
         data = json.loads(body)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        _log_timing("ollama.api (failed)", time.perf_counter() - started_at)
         return None
+
+    _log_timing("ollama.api", time.perf_counter() - started_at)
 
     response_text = (data.get("response", "") or "").strip()
     if response_text:
@@ -209,6 +226,7 @@ def _ask_ollama_api(prompt, system_prompt, num_predict_override=None, allow_empt
 
 
 def prewarm_ollama():
+    started_at = time.perf_counter()
     was_running = is_ollama_api_available()
 
     if not ensure_ollama_api_ready():
@@ -224,13 +242,18 @@ def prewarm_ollama():
     )
     if response is None:
         if was_running:
+            _log_timing("ollama.prewarm", time.perf_counter() - started_at)
             return "already_running"
+        _log_timing("ollama.prewarm", time.perf_counter() - started_at)
         return "request_failed"
+    _log_timing("ollama.prewarm", time.perf_counter() - started_at)
     return "ok"
 
 
 def is_ollama_model_available():
+    started_at = time.perf_counter()
     if not ensure_ollama_api_ready():
+        _log_timing("ollama.model_check", time.perf_counter() - started_at)
         return None
 
     req = urllib.request.Request(OLLAMA_TAGS_URL, method="GET")
@@ -239,10 +262,12 @@ def is_ollama_model_available():
             body = response.read().decode("utf-8")
         data = json.loads(body)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        _log_timing("ollama.model_check", time.perf_counter() - started_at)
         return None
 
     models = data.get("models", []) or []
     names = {item.get("name", "") for item in models if isinstance(item, dict)}
+    _log_timing("ollama.model_check", time.perf_counter() - started_at)
     return OLLAMA_MODEL in names
 
 
@@ -356,6 +381,7 @@ If information is uncertain or missing, say so clearly.
 
 
 def research_web_duckduckgo(query, max_results=3):
+    started_at = time.perf_counter()
     url = (
         "https://api.duckduckgo.com/?"
         + urllib.parse.urlencode({
@@ -373,6 +399,7 @@ def research_web_duckduckgo(query, max_results=3):
             body = response.read().decode("utf-8")
         data = json.loads(body)
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        _log_timing("web.duckduckgo", time.perf_counter() - started_at)
         return []
 
     cleaned = []
@@ -414,14 +441,17 @@ def research_web_duckduckgo(query, max_results=3):
                     "content": text,
                 })
 
+    _log_timing("web.duckduckgo", time.perf_counter() - started_at)
     return cleaned[:max_results]
 
 
 def build_research_context(query):
+    started_at = time.perf_counter()
     provider = "DuckDuckGo"
     results = research_web_duckduckgo(query, WEB_MAX_RESULTS)
 
     if not results:
+        _log_timing("web.build_context", time.perf_counter() - started_at)
         return "No web sources were retrieved."
 
     chunks = []
@@ -431,7 +461,9 @@ def build_research_context(query):
         chunks.append(
             f"[{idx}] {item['title']}\nURL: {item['url']}\nSnippet: {snippet}"
         )
-    return "\n\n".join(chunks)
+    context = "\n\n".join(chunks)
+    _log_timing("web.build_context", time.perf_counter() - started_at)
+    return context
 
 # -------------------
 # Piper speech
@@ -439,8 +471,10 @@ def build_research_context(query):
 
 
 def speak(text):
+    total_started_at = time.perf_counter()
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         wav_file = f.name
+    synth_started_at = time.perf_counter()
     subprocess.run(
         [
             "piper",
@@ -453,8 +487,12 @@ def speak(text):
         ],
         input=text.encode()
     )
+    _log_timing("piper.synthesize", time.perf_counter() - synth_started_at)
+    playback_started_at = time.perf_counter()
     subprocess.run(["aplay", wav_file])
+    _log_timing("audio.playback", time.perf_counter() - playback_started_at)
     os.remove(wav_file)
+    _log_timing("tts.total", time.perf_counter() - total_started_at)
 
 # -------------------
 # Main loop

@@ -48,7 +48,45 @@ You must have these available on your `PATH`.
 By default, Simon expects:
 
 - Whisper model at `./models/whisper/ggml-small.bin`
-- Piper model at `./models/piper/en_GB-alan-medium.onnx`
+- Piper model at `./models/piper/en_GB-alan-medium.onnx` (with matching `.json` config)
+
+### 1) Create model directories
+
+```bash
+mkdir -p models/whisper models/piper
+```
+
+### 2) Download Whisper model (`ggml-small.bin`)
+
+From the project root:
+
+```bash
+curl -L -o models/whisper/ggml-small.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+```
+
+### 3) Download Piper voice model (`en_GB-alan-medium`)
+
+Piper needs both files in the same folder:
+
+- `en_GB-alan-medium.onnx`
+- `en_GB-alan-medium.onnx.json`
+
+Download both:
+
+```bash
+curl -L -o models/piper/en_GB-alan-medium.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/alan/medium/en_GB-alan-medium.onnx
+
+curl -L -o models/piper/en_GB-alan-medium.onnx.json \
+  https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json
+```
+
+### 4) Verify files exist
+
+```bash
+ls -lh models/whisper/ggml-small.bin models/piper/en_GB-alan-medium.onnx models/piper/en_GB-alan-medium.onnx.json
+```
 
 If your files are elsewhere, update the constants in `simon.py`:
 
@@ -102,11 +140,11 @@ Simon is primarily configured via environment variables.
 
 ### General
 
-- `SIMON_ASSISTANT_NAME` (default: `Simon`)
-  - Displayed assistant name used in prompts/output.
-
 - `SIMON_FAST_MODE` (default: `1`)
   - If `1`, uses lower-latency Ollama defaults.
+
+- `SIMON_DEBUG` (default: inherits `SIMON_WEB_DEBUG`, else `0`)
+  - If `1`, prints component timing metrics (recording, Whisper, Ollama API/CLI, web research, Piper synthesis/playback).
 
 - `SIMON_TTS_SPEED` (default: `1.0`)
   - TTS speed multiplier; clamped to `0.5..3.0`.
@@ -176,8 +214,8 @@ These are not env vars, but fixed in code unless edited:
 ## Example `.env`-style configuration
 
 ```bash
-export SIMON_ASSISTANT_NAME="Simon"
 export SIMON_FAST_MODE=1
+export SIMON_DEBUG=0
 export SIMON_OLLAMA_MODEL="llama3.2:3b"
 export SIMON_TTS_SPEED=1.1
 export SIMON_WHISPER_MODEL="./models/whisper/ggml-small.bin"
