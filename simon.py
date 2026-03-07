@@ -515,7 +515,8 @@ def main():
         "  ╚══════╝╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝\n"
     )
     print(color_text(banner, BOLD + MAGENTA))
-    print("Startup summary")
+    print("GitHub: https://github.com/Jonesie/Simon")
+    print("")
     print(f"- Assistant: {ASSISTANT_NAME}")
     print(f"- Ollama model: {OLLAMA_MODEL}")
     print(f"- Ollama fast mode: {'ON' if SIMON_FAST_MODE else 'OFF'}")
