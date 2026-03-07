@@ -1,4 +1,11 @@
-# Simon
+```text        
+         ███████╗██╗███╗   ███╗ ██████╗ ███╗   ██╗
+         ██╔════╝██║████╗ ████║██╔═══██╗████╗  ██║
+         ███████╗██║██╔████╔██║██║   ██║██╔██╗ ██║
+         ╚════██║██║██║╚██╔╝██║██║   ██║██║╚██╗██║
+         ███████║██║██║ ╚═╝ ██║╚██████╔╝██║ ╚████║
+         ╚══════╝╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
+```
 
 Simon is a local voice assistant that listens to your speech, transcribes it with Whisper, gets a response from Ollama, and speaks the response back with Piper.
 
